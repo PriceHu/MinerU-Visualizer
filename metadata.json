@@ -1,0 +1,5 @@
+{
+  "name": "MinerU Visualizer",
+  "description": "A tool to visualize PDF layout analysis results by overlaying bounding boxes from a JSON parser output onto the original PDF document.",
+  "requestFramePermissions": []
+}
