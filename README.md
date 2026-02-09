@@ -1,5 +1,7 @@
 # MinerU Visualizer
 
+> **Note:** This project was created using Google AI Studio with the Gemini 3 Pro model.
+
 MinerU Visualizer is a web-based tool designed to visualize layout analysis results on PDF documents. It allows users to overlay bounding boxes from a JSON parser output (specifically formatted for MinerU/Magic-PDF) onto the original PDF document to inspect detection accuracy and structure.
 
 ## Features
