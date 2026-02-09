@@ -4,6 +4,10 @@
 
 MinerU Visualizer is a web-based tool designed to visualize layout analysis results on PDF documents. It allows users to overlay bounding boxes from a JSON parser output (specifically formatted for MinerU/Magic-PDF) onto the original PDF document to inspect detection accuracy and structure.
 
+## Demo
+
+The application is deployed at: https://pricehu.github.io/MinerU-Visualizer/
+
 ## Features
 
 - **PDF & JSON Upload**: Upload a PDF file and its corresponding JSON analysis result.
@@ -20,6 +24,39 @@ MinerU Visualizer is a web-based tool designed to visualize layout analysis resu
    - The tool supports the standard `pdf_info` JSON format produced by layout analysis tools.
 4. The PDF will render in the main view with overlays.
 5. Use the sidebar to toggle layers or inspect specific blocks.
+
+## Development
+
+### Prerequisites
+
+- Node.js 18 or higher
+- npm
+
+### Installation
+
+```bash
+npm install --legacy-peer-deps
+```
+
+### Running Locally
+
+```bash
+npm run dev
+```
+
+The application will be available at http://localhost:3000
+
+### Building for Production
+
+```bash
+npm run build
+```
+
+The build output will be in the `dist` directory.
+
+## Deployment
+
+This project is automatically deployed to GitHub Pages when changes are pushed to the `main` branch. The deployment is handled by a GitHub Actions workflow.
 
 ## JSON Format
 
