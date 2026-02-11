@@ -34,7 +34,8 @@ export const PDFPageWrapper: React.FC<PDFPageWrapperProps> = ({
   selectedBlock,
   visibleTypes
 }) => {
-  const [renderedDimensions, setRenderedDimensions] = useState<{width: number, height: number} | null>(null);
+  // We store the original PDF dimensions to convert relative coordinates
+  const [pageDimensions, setPageDimensions] = useState<{width: number, height: number} | null>(null);
 
   // Combine regular paragraph blocks and discarded blocks (headers/footers)
   // And flatten them to include nested blocks (table captions, bodies, etc)
@@ -49,16 +50,20 @@ export const PDFPageWrapper: React.FC<PDFPageWrapperProps> = ({
     const flattened = flattenBlocks(topLevel);
 
     // Sort by area descending (largest first) so small blocks sit on top in Z-order
-    // Note: In HTML, later elements are on top. So we want largest first, smallest last.
     return flattened.sort((a, b) => {
-      const areaA = (a.bbox[2] - a.bbox[0]) * (a.bbox[3] - a.bbox[1]);
-      const areaB = (b.bbox[2] - b.bbox[0]) * (b.bbox[3] - b.bbox[1]);
-      return areaB - areaA;
+      // Calculate area roughly. If relative, values are small <1, but relative comparison still holds 
+      // as long as they are on the same page.
+      const widthA = a.bbox[2] - a.bbox[0];
+      const heightA = a.bbox[3] - a.bbox[1];
+      const widthB = b.bbox[2] - b.bbox[0];
+      const heightB = b.bbox[3] - b.bbox[1];
+      return (widthB * heightB) - (widthA * heightA);
     });
   }, [pageInfo]);
 
   const handlePageLoadSuccess = (page: any) => {
-    setRenderedDimensions({ width: page.originalWidth * scale, height: page.originalHeight * scale });
+    // page.originalWidth/originalHeight are in PDF points (72dpi typically)
+    setPageDimensions({ width: page.originalWidth, height: page.originalHeight });
   };
 
   return (
@@ -81,23 +86,38 @@ export const PDFPageWrapper: React.FC<PDFPageWrapperProps> = ({
            <div className="relative w-full h-full pointer-events-auto">
              {allBlocks.map((block, idx) => {
                 // Determine effective type for visibility check
-                // This ensures 'table_caption' shows up when 'table' is selected
                 let effectiveType = block.type;
                 if (block.type.startsWith('table_')) effectiveType = 'table';
                 if (block.type.startsWith('image_')) effectiveType = 'image';
 
                 if (!visibleTypes.has(effectiveType) && !visibleTypes.has('all')) {
-                   // If specific type is not checked
                    return null;
+                }
+
+                // Handle Relative Coordinates
+                let displayBlock = block;
+                if (block.bbox_type === 'relative') {
+                   // If dimensions aren't loaded yet, we can't render relative blocks correctly
+                   if (!pageDimensions) return null;
+
+                   displayBlock = {
+                     ...block,
+                     bbox: [
+                       block.bbox[0] * pageDimensions.width,
+                       block.bbox[1] * pageDimensions.height,
+                       block.bbox[2] * pageDimensions.width,
+                       block.bbox[3] * pageDimensions.height
+                     ]
+                   };
                 }
                 
                 return (
                   <OverlayBox
                     key={`${pageInfo.page_idx}-${idx}-${block.index || idx}`}
-                    block={block}
+                    block={displayBlock} // Pass the possibly modified block with absolute coords
                     scale={scale}
-                    isSelected={selectedBlock === block}
-                    onSelect={onBlockSelect}
+                    isSelected={selectedBlock === block} // Compare with original block ref for equality check
+                    onSelect={() => onBlockSelect(block)} // Select the original block data
                   />
                 );
              })}

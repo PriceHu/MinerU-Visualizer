@@ -34,20 +34,70 @@ export default function App() {
         const text = e.target?.result as string;
         const json = JSON.parse(text);
         
-        // Basic validation
-        if (!json.pdf_info && !Array.isArray(json)) {
-           throw new Error("Invalid JSON format: missing 'pdf_info' or not an array structure.");
+        let result: PDFParsingResult | null = null;
+
+        // Detection Logic
+        // Case 1: Standard layout result { pdf_info: [...] }
+        if (json.pdf_info) {
+          result = json;
+        } 
+        // Case 2: Array format
+        else if (Array.isArray(json)) {
+           if (json.length === 0) {
+             throw new Error("JSON array is empty.");
+           }
+           
+           const firstItem = json[0];
+           
+           // Case 2a: Array of PageInfo objects (Standard layout result but just the array)
+           // Check if first item has 'para_blocks'
+           if (firstItem && typeof firstItem === 'object' && 'para_blocks' in firstItem) {
+             result = { pdf_info: json };
+           }
+           // Case 2b: Array of Arrays (Model Inference Result)
+           // [[{type:..., bbox:...}], ...]
+           else if (Array.isArray(firstItem)) {
+             // Convert Model Inference Result to PDFParsingResult structure
+             const pdf_info: PageInfo[] = json.map((pageBlocks: any[], index: number) => ({
+               page_idx: index,
+               page_size: [0, 0], // Unknown, will be handled by relative coordinates
+               para_blocks: pageBlocks.map(block => ({
+                 ...block,
+                 bbox_type: 'relative' // Model output uses normalized coordinates [0-1]
+               }))
+             }));
+             result = { pdf_info };
+           }
+           else {
+             throw new Error("Unknown JSON array structure.");
+           }
+        }
+        else {
+           throw new Error("Invalid JSON format. Expected object with 'pdf_info' or array.");
+        }
+        
+        if (result) {
+          // Ensure bbox_type is set for standard layout results if missing (default to absolute)
+          result.pdf_info.forEach(page => {
+             if (page.para_blocks) {
+               page.para_blocks.forEach(b => {
+                 if (!b.bbox_type) b.bbox_type = 'absolute';
+               });
+             }
+             if (page.discarded_blocks) {
+               page.discarded_blocks.forEach(b => {
+                 if (!b.bbox_type) b.bbox_type = 'absolute';
+               });
+             }
+          });
+
+          setParsingResult(result);
+          setError(null);
         }
 
-        // Support both { pdf_info: [...] } and direct array formats if applicable, 
-        // but user prompt suggests { pdf_info: [...] }
-        const result: PDFParsingResult = json.pdf_info ? json : { pdf_info: json };
-        
-        setParsingResult(result);
-        setError(null);
       } catch (err) {
         console.error(err);
-        setError("Failed to parse JSON file. Please check the format.");
+        setError("Failed to parse JSON file. Please ensure it matches MinerU layout or model output format.");
         setParsingResult(null);
       }
     };
@@ -163,11 +213,18 @@ export default function App() {
                     `}>
                       {selectedBlock.type}
                     </span>
+                    {/* Only show numeric bbox info if it's absolute or if we handle relative display */}
                     <div className="grid grid-cols-2 gap-2 text-xs text-slate-500 font-mono mt-1">
-                      <div className="bg-white px-2 py-1 rounded border">x: {Math.round(selectedBlock.bbox[0])}</div>
-                      <div className="bg-white px-2 py-1 rounded border">y: {Math.round(selectedBlock.bbox[1])}</div>
-                      <div className="bg-white px-2 py-1 rounded border">w: {Math.round(selectedBlock.bbox[2] - selectedBlock.bbox[0])}</div>
-                      <div className="bg-white px-2 py-1 rounded border">h: {Math.round(selectedBlock.bbox[3] - selectedBlock.bbox[1])}</div>
+                       {/* Note: These values might be relative (0-1) or absolute. Display as is. */}
+                      <div className="bg-white px-2 py-1 rounded border">x: {selectedBlock.bbox[0].toFixed(2)}</div>
+                      <div className="bg-white px-2 py-1 rounded border">y: {selectedBlock.bbox[1].toFixed(2)}</div>
+                      <div className="bg-white px-2 py-1 rounded border">w: {(selectedBlock.bbox[2] - selectedBlock.bbox[0]).toFixed(2)}</div>
+                      <div className="bg-white px-2 py-1 rounded border">h: {(selectedBlock.bbox[3] - selectedBlock.bbox[1]).toFixed(2)}</div>
+                      {selectedBlock.bbox_type === 'relative' && (
+                        <div className="col-span-2 text-[10px] text-orange-500 italic">
+                          (Normalized Coordinates 0-1)
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -185,6 +242,16 @@ export default function App() {
                      </div>
                   )}
                   
+                  {/* Show direct content if exists (model output often has this) */}
+                  {selectedBlock.content && (
+                     <div className="space-y-2">
+                       <p className="text-xs font-semibold text-slate-700">Content:</p>
+                       <div className="text-xs text-slate-600 bg-white p-2 rounded border border-slate-100 max-h-40 overflow-y-auto whitespace-pre-wrap">
+                         {selectedBlock.content}
+                       </div>
+                     </div>
+                  )}
+                  
                   {/* Fallback for table HTML content if exists */}
                   {(selectedBlock as any).html && (
                     <div className="space-y-2">
@@ -198,7 +265,7 @@ export default function App() {
                   <div className="pt-4 border-t border-slate-200">
                     <p className="text-[10px] text-slate-400 uppercase tracking-wider">Raw Data</p>
                     <pre className="text-[10px] text-slate-500 mt-1 overflow-x-auto">
-                      {JSON.stringify({ ...selectedBlock, lines: '[...]' }, null, 2)}
+                      {JSON.stringify({ ...selectedBlock, lines: selectedBlock.lines ? '[...]' : undefined }, null, 2)}
                     </pre>
                   </div>
                 </div>

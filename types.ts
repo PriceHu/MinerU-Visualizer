@@ -1,3 +1,4 @@
+
 export interface Span {
   bbox: [number, number, number, number];
   type: string;
@@ -15,6 +16,7 @@ export interface Block {
   lines?: Line[];
   index?: number;
   blocks?: Block[]; // For nested lists or tables
+  bbox_type?: 'absolute' | 'relative'; // Support for normalized coordinates
   // Allow for other parsing properties
   [key: string]: any;
 }
